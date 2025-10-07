@@ -25,7 +25,10 @@ export class RunButtonExtension implements DocumentRegistry.IWidgetExtension<any
     // Only add button for .java and .jsh files
     if (!fileName.endsWith('.java') && !fileName.endsWith('.jsh')) {
       console.log('[jupyter-jbang-runner] Not a Java file, skipping:', fileName);
-      return { dispose: () => {} };
+      return {
+        dispose: () => {},
+        get isDisposed() { return false; }
+      };
     }
 
     console.log('[jupyter-jbang-runner] Adding run button for:', fileName);
