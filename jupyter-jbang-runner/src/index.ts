@@ -7,6 +7,8 @@ import { IDocumentManager } from '@jupyterlab/docmanager';
 
 import { ITranslator } from '@jupyterlab/translation';
 
+import { ICommandPalette } from '@jupyterlab/apputils';
+
 import { addRunButton } from './runButton';
 
 /**
@@ -16,15 +18,20 @@ const plugin: JupyterFrontEndPlugin<void> = {
   id: 'jupyter-jbang-runner:plugin',
   autoStart: true,
   requires: [IDocumentManager, ITranslator],
+  optional: [ICommandPalette],
   activate: (
     app: JupyterFrontEnd,
     docManager: IDocumentManager,
-    translator: ITranslator
+    translator: ITranslator,
+    palette: ICommandPalette | null
   ) => {
-    console.log('JupyterLab extension jupyter-jbang-runner is activated!');
+    console.log('[jupyter-jbang-runner] Extension activating...');
+    console.log('[jupyter-jbang-runner] JupyterLab version:', app.version);
 
     // Add run button to file editors
-    addRunButton(app, docManager, translator);
+    addRunButton(app, docManager, translator, palette);
+    
+    console.log('[jupyter-jbang-runner] ✓ Extension activated successfully!');
   }
 };
 

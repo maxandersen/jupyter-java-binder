@@ -1,8 +1,76 @@
 import { JupyterFrontEnd } from '@jupyterlab/application';
 import { IDocumentManager } from '@jupyterlab/docmanager';
 import { ITranslator } from '@jupyterlab/translation';
-import { ToolbarButton } from '@jupyterlab/apputils';
+import { ToolbarButton, ICommandPalette } from '@jupyterlab/apputils';
 import { runIcon } from '@jupyterlab/ui-components';
+import { DocumentRegistry } from '@jupyterlab/docregistry';
+import { IDisposable } from '@lumino/disposable';
+
+/**
+ * A widget extension that adds a run button to file editors
+ */
+export class RunButtonExtension implements DocumentRegistry.IWidgetExtension<any, any> {
+  constructor(
+    private app: JupyterFrontEnd,
+    private translator: ITranslator
+  ) {
+    console.log('[jupyter-jbang-runner] RunButtonExtension created');
+  }
+
+  createNew(widget: any, context: DocumentRegistry.IContext<any>): IDisposable {
+    console.log('[jupyter-jbang-runner] createNew called for:', context.path);
+    
+    const fileName = context.path.split('/').pop() || '';
+    
+    // Only add button for .java and .jsh files
+    if (!fileName.endsWith('.java') && !fileName.endsWith('.jsh')) {
+      console.log('[jupyter-jbang-runner] Not a Java file, skipping:', fileName);
+      return { dispose: () => {} };
+    }
+
+    console.log('[jupyter-jbang-runner] Adding run button for:', fileName);
+
+    const trans = this.translator.load('jupyter-jbang-runner');
+    const runCommand = 'jupyter-jbang-runner:run-file';
+
+    // Create the run button
+    const button = new ToolbarButton({
+      className: 'jbang-run-button',
+      icon: runIcon,
+      onClick: async () => {
+        console.log('[jupyter-jbang-runner] Run button clicked for:', context.path);
+        
+        try {
+          // Create a new terminal and run jbang
+          const terminal = await this.app.commands.execute('terminal:create-new');
+          
+          // Wait a bit for terminal to be ready
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Send the jbang command to the terminal
+          const terminalWidget = terminal as any;
+          if (terminalWidget && terminalWidget.session) {
+            const command = `jbang run "${context.path}"\n`;
+            console.log('[jupyter-jbang-runner] Sending command:', command);
+            terminalWidget.session.send({
+              type: 'stdin',
+              content: [command]
+            });
+          }
+        } catch (error) {
+          console.error('[jupyter-jbang-runner] Failed to run file:', error);
+        }
+      },
+      tooltip: trans.__('Run this file with jbang')
+    });
+
+    // Add button to toolbar
+    widget.toolbar.insertItem(10, 'jbangRun', button);
+    console.log('[jupyter-jbang-runner] ✓ Button added to toolbar');
+
+    return button;
+  }
+}
 
 /**
  * Add a run button to file editors for .java and .jsh files
@@ -10,123 +78,77 @@ import { runIcon } from '@jupyterlab/ui-components';
 export function addRunButton(
   app: JupyterFrontEnd,
   docManager: IDocumentManager,
-  translator: ITranslator
+  translator: ITranslator,
+  palette: ICommandPalette | null
 ): void {
+  console.log('[jupyter-jbang-runner] Setting up run button functionality');
+
   const trans = translator.load('jupyter-jbang-runner');
 
-  // Add run command
+  // Create the widget extension
+  const extension = new RunButtonExtension(app, translator);
+  
+  // Register the extension with the document registry
+  const fileTypes = ['java', 'jsh'];
+  
+  // Try to get widget factory for file editor
+  docManager.registry.addWidgetExtension('Editor', extension);
+  console.log('[jupyter-jbang-runner] Widget extension registered with Editor factory');
+
+  // Add command for running files
   const runCommand = 'jupyter-jbang-runner:run-file';
-  app.commands.addCommand(runCommand, {
-    label: trans.__('Run with jbang'),
-    icon: runIcon,
-    execute: async (args: any) => {
-      const widget = args.widget;
-      if (!widget) {
-        return;
-      }
-
-      const context = docManager.contextForWidget(widget);
-      if (!context) {
-        return;
-      }
-
-      const filePath = context.path;
-      const fileName = filePath.split('/').pop() || '';
-      
-      // Check if file is .java or .jsh
-      if (!fileName.endsWith('.java') && !fileName.endsWith('.jsh')) {
-        console.warn('File is not a .java or .jsh file');
-        return;
-      }
-
-      try {
-        // Create a new terminal and run jbang
-        const terminal = await app.commands.execute('terminal:create-new');
-        
-        // Wait a bit for terminal to be ready
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Send the jbang command to the terminal
-        const terminalWidget = terminal as any;
-        if (terminalWidget && terminalWidget.session) {
-          const command = `jbang run "${filePath}"\n`;
-          terminalWidget.session.send({
-            type: 'stdin',
-            content: [command]
-          });
-        }
-      } catch (error) {
-        console.error('Failed to run file with jbang:', error);
-      }
-    }
-  });
-
-  // Function to add run button to editor
-  function addRunButtonToEditor(widget: any): void {
-    const context = docManager.contextForWidget(widget);
-    if (!context) {
-      return;
-    }
-
-    const filePath = context.path;
-    const fileName = filePath.split('/').pop() || '';
-    
-    // Only add button for .java and .jsh files
-    if (!fileName.endsWith('.java') && !fileName.endsWith('.jsh')) {
-      return;
-    }
-
-    // Get the content widget (FileEditor)
-    const content = widget.content;
-    if (!content) {
-      return;
-    }
-
-    // Check if button already exists
-    const toolbar = (content as any).toolbar;
-    if (!toolbar) {
-      return;
-    }
-
-    const existingButton = toolbar.node.querySelector('[data-command="jupyter-jbang-runner:run-file"]');
-    if (existingButton) {
-      return;
-    }
-
-    // Create and add the run button
-    const runButton = new ToolbarButton({
-      className: 'jbang-run-button',
+  if (!app.commands.hasCommand(runCommand)) {
+    app.commands.addCommand(runCommand, {
+      label: trans.__('Run with jbang'),
       icon: runIcon,
-      onClick: () => {
-        app.commands.execute(runCommand, { widget: widget });
-      },
-      tooltip: trans.__('Run this file with jbang')
-    });
+      execute: async () => {
+        console.log('[jupyter-jbang-runner] Run command executed from palette');
+        const widget = app.shell.currentWidget;
+        if (!widget) {
+          console.warn('[jupyter-jbang-runner] No current widget');
+          return;
+        }
 
-    // Add the button to the toolbar
-    toolbar.addItem('jbang-run', runButton);
-  }
+        const context = docManager.contextForWidget(widget);
+        if (!context) {
+          console.warn('[jupyter-jbang-runner] No context for widget');
+          return;
+        }
 
-  // Listen for new widgets being added
-  if (app.shell.currentChanged) {
-    app.shell.currentChanged.connect((sender: any, args: any) => {
-      const widget = args.newValue;
-      if (widget && widget.content) {
-        // Wait for the widget to be ready
-        setTimeout(() => {
-          addRunButtonToEditor(widget);
-        }, 100);
+        const filePath = context.path;
+        const fileName = filePath.split('/').pop() || '';
+        
+        if (!fileName.endsWith('.java') && !fileName.endsWith('.jsh')) {
+          console.warn('[jupyter-jbang-runner] Not a Java file:', fileName);
+          return;
+        }
+
+        try {
+          const terminal = await app.commands.execute('terminal:create-new');
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const terminalWidget = terminal as any;
+          if (terminalWidget && terminalWidget.session) {
+            const command = `jbang run "${filePath}"\n`;
+            terminalWidget.session.send({
+              type: 'stdin',
+              content: [command]
+            });
+          }
+        } catch (error) {
+          console.error('[jupyter-jbang-runner] Failed to run file:', error);
+        }
       }
     });
+
+    // Add to command palette
+    if (palette) {
+      palette.addItem({
+        command: runCommand,
+        category: 'File Operations'
+      });
+    }
   }
 
-  // Add buttons to existing widgets
-  setTimeout(() => {
-    const widgets = Array.from(app.shell.widgets('main'));
-    widgets.forEach((widget: any) => {
-      if (widget && widget.content) {
-        addRunButtonToEditor(widget);
-      }
-    });
-  }, 1000);
+  console.log('[jupyter-jbang-runner] Setup complete');
 }
