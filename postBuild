@@ -25,3 +25,8 @@ jbang install-kernel@jupyter-java --java $JAVA_VERSION rapaio
 jbang install-kernel@jupyter-java --java $JAVA_VERSION kotlin
 jbang install-kernel@jupyter-java --java $JAVA_VERSION ijava
 ## end install kernels
+
+# Install the jupyter-jbang-runner extension
+cd jupyter-jbang-runner
+./install.sh
+cd ..

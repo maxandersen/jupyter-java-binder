@@ -1,0 +1,1 @@
+{"version":3,"file":"runButton.d.ts","sourceRoot":"","sources":["../src/runButton.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,eAAe,EAAE,MAAM,yBAAyB,CAAC;AAC1D,OAAO,EAAE,gBAAgB,EAAE,MAAM,wBAAwB,CAAC;AAC1D,OAAO,EAAE,WAAW,EAAE,MAAM,yBAAyB,CAAC;AAItD;;GAEG;AACH,wBAAgB,YAAY,CAC1B,GAAG,EAAE,eAAe,EACpB,UAAU,EAAE,gBAAgB,EAC5B,UAAU,EAAE,WAAW,GACtB,IAAI,CAsHN"}
