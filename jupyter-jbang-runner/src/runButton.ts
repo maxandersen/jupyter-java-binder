@@ -8,6 +8,65 @@ import { IDisposable } from '@lumino/disposable';
 import { Terminal } from '@jupyterlab/terminal';
 
 /**
+ * Helper function to run a file with jbang in a terminal
+ */
+async function runFileInTerminal(
+  app: JupyterFrontEnd,
+  filePath: string
+): Promise<void> {
+  const command = `jbang run "${filePath}"\n`;
+  const fileName = filePath.split('/').pop() || '';
+  const terminalName = `jbang-${fileName}`;
+  
+  console.log('[jupyter-jbang-runner] Looking for existing terminal:', terminalName);
+  
+  // Check if a terminal for this file already exists
+  let existingTerminal: any = null;
+  const widgets = app.shell.widgets('main');
+  for (const widget of widgets) {
+    console.log('[jupyter-jbang-runner] Checking widget:', widget.id);
+    if (widget instanceof Terminal && widget.title.dataset.id == terminalName) {
+      existingTerminal = widget;
+      console.log('[jupyter-jbang-runner] ✓ Found existing terminal, reusing it');
+      break;
+    }
+  }
+  
+  let term: Terminal;
+  
+  if (existingTerminal) {
+    // Reuse existing terminal
+    term = existingTerminal;
+  } else {
+    // Create a new terminal session
+    console.log('[jupyter-jbang-runner] Creating new terminal for:', fileName);
+    const session = await app.serviceManager.terminals.startNew();
+    console.log('[jupyter-jbang-runner] ✓ Terminal session started');
+    
+    // Create a new terminal widget with the session
+    term = new Terminal(session);
+    term.id = terminalName;
+    term.title.label = `JBang: ${fileName}`;
+    term.title.closable = true;
+    
+    // Add terminal to shell
+    app.shell.add(term, 'main', { mode: 'split-bottom' });
+    console.log('[jupyter-jbang-runner] ✓ Terminal added to shell');
+  }
+  
+  // Activate the terminal to make it visible
+  app.shell.activateById(term.id);
+  
+  // Send the command to the terminal
+  if (term.session) {
+    term.session.send({ type: 'stdin', content: [command] });
+    console.log('[jupyter-jbang-runner] ✓ Command sent to terminal');
+  } else {
+    console.error('[jupyter-jbang-runner] Terminal session not available');
+  }
+}
+
+/**
  * A widget extension that adds a run button to file editors
  */
 export class RunButtonExtension implements DocumentRegistry.IWidgetExtension<any, any> {
@@ -43,29 +102,8 @@ export class RunButtonExtension implements DocumentRegistry.IWidgetExtension<any
       icon: runIcon,
       onClick: async () => {
         console.log('[jupyter-jbang-runner] Run button clicked for:', context.path);
-        
         try {
-          const command = `jbang run "${context.path}"\n`;
-          console.log('[jupyter-jbang-runner] Creating terminal with command:', command);
-          
-          // Start a new terminal session
-          const session = await this.app.serviceManager.terminals.startNew();
-          console.log('[jupyter-jbang-runner] ✓ Terminal session started');
-          
-          // Create a new terminal widget with the session
-          const term = new Terminal(session);
-          term.id = `jbang-terminal-${session.name}`;
-          term.title.label = `JBang: ${context.path.split('/').pop()}`;
-          term.title.closable = true;
-          
-          // Add terminal to shell
-          this.app.shell.add(term, 'main', { mode: 'split-bottom' });
-          this.app.shell.activateById(term.id);
-          console.log('[jupyter-jbang-runner] ✓ Terminal added to shell');
-          
-          // Send the initial command to the terminal
-          session.send({ type: 'stdin', content: [command] });
-          console.log('[jupyter-jbang-runner] ✓ Command sent to terminal');
+          await runFileInTerminal(this.app, context.path);
         } catch (error) {
           console.error('[jupyter-jbang-runner] Failed to run file:', error);
         }
@@ -133,27 +171,7 @@ export function addRunButton(
         }
 
         try {
-          const command = `jbang run "${filePath}"\n`;
-          console.log('[jupyter-jbang-runner] Creating terminal with command:', command);
-          
-          // Start a new terminal session
-          const session = await app.serviceManager.terminals.startNew();
-          console.log('[jupyter-jbang-runner] ✓ Terminal session started');
-          
-          // Create a new terminal widget with the session
-          const term = new Terminal(session);
-          term.id = `jbang-terminal-${session.name}`;
-          term.title.label = `JBang: ${fileName}`;
-          term.title.closable = true;
-          
-          // Add terminal to shell
-          app.shell.add(term, 'main', { mode: 'split-bottom' });
-          app.shell.activateById(term.id);
-          console.log('[jupyter-jbang-runner] ✓ Terminal added to shell');
-          
-          // Send the initial command to the terminal
-          session.send({ type: 'stdin', content: [command] });
-          console.log('[jupyter-jbang-runner] ✓ Command sent to terminal');
+          await runFileInTerminal(app, filePath);
         } catch (error) {
           console.error('[jupyter-jbang-runner] Failed to run file:', error);
         }
