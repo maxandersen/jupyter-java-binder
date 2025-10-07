@@ -37,6 +37,7 @@
     "@jupyterlab/mainmenu": "^4.0.0",
     "@jupyterlab/notebook": "^4.0.0",
     "@jupyterlab/services": "^7.0.0",
+    "@jupyterlab/terminal": "^4.0.0",
     "@jupyterlab/translation": "^4.0.0",
     "@jupyterlab/ui-components": "^4.0.0"
   },
@@ -85,6 +86,10 @@
         "singleton": true
       },
       "@jupyterlab/services": {
+        "bundled": false,
+        "singleton": true
+      },
+      "@jupyterlab/terminal": {
         "bundled": false,
         "singleton": true
       },
