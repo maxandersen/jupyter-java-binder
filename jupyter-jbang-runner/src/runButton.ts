@@ -12,8 +12,16 @@ import { Terminal } from '@jupyterlab/terminal';
  */
 async function runFileInTerminal(
   app: JupyterFrontEnd,
-  filePath: string
+  filePath: string,
+  context?: DocumentRegistry.IContext<any>
 ): Promise<void> {
+  // Save the file before running if context is provided
+  if (context && context.model.dirty) {
+    console.log('[jupyter-jbang-runner] File has unsaved changes, saving...');
+    await context.save();
+    console.log('[jupyter-jbang-runner] ✓ File saved');
+  }
+  
   const command = `jbang run "${filePath}"\n`;
   const fileName = filePath.split('/').pop() || '';
   const terminalName = `jbang-${fileName}`;
@@ -103,7 +111,7 @@ export class RunButtonExtension implements DocumentRegistry.IWidgetExtension<any
       onClick: async () => {
         console.log('[jupyter-jbang-runner] Run button clicked for:', context.path);
         try {
-          await runFileInTerminal(this.app, context.path);
+          await runFileInTerminal(this.app, context.path, context);
         } catch (error) {
           console.error('[jupyter-jbang-runner] Failed to run file:', error);
         }
@@ -171,7 +179,7 @@ export function addRunButton(
         }
 
         try {
-          await runFileInTerminal(app, filePath);
+          await runFileInTerminal(app, filePath, context);
         } catch (error) {
           console.error('[jupyter-jbang-runner] Failed to run file:', error);
         }
