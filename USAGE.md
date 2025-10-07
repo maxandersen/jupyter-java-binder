@@ -26,6 +26,17 @@ The repository includes example files to test the extension:
 
 The extension is automatically installed when you build the Binder environment using the `postBuild` script.
 
+### What the postBuild script does:
+
+1. Installs and configures jbang
+2. Installs all Java kernels (jbang, jjava, rapaio, kotlin, ijava)
+3. Builds the jupyter-jbang-runner extension
+4. Installs the extension as a Python package
+5. Links the extension to JupyterLab
+6. Rebuilds JupyterLab to include the new extension
+
+This process ensures the run button appears in the toolbar when you open `.java` or `.jsh` files.
+
 ## Development
 
 To develop or modify the extension:

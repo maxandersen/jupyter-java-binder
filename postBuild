@@ -6,7 +6,7 @@ JAVA_VERSION=25
 
 # only required to allow pulling content from an arbitrary repository
 # remove if you do not want this feature
-jupyter serverextension enable --py nbgitpuller --sys-prefix
+jupyter server extension enable --py nbgitpuller --sys-prefix
 
 # Install JBang
 export JBANG_DEFAULT_JAVA_VERSION=$JAVA_VERSION
@@ -28,5 +28,14 @@ jbang install-kernel@jupyter-java --java $JAVA_VERSION ijava
 
 # Install the jupyter-jbang-runner extension
 cd jupyter-jbang-runner
-./install.sh
+# Build the extension
+npm install --no-prepare
+npm run build:prod
+# Install as Python package
+pip install -e .
+# Link the extension for development
+jupyter labextension develop . --overwrite
 cd ..
+
+# Build JupyterLab to include the new extension
+jupyter lab build --minimize=False
