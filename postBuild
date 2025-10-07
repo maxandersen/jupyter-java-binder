@@ -39,3 +39,21 @@ cd ..
 
 # Build JupyterLab to include the new extension
 jupyter lab build --minimize=False
+
+# Clean up to reduce Docker image size
+echo "Cleaning up build artifacts to reduce image size..."
+
+# Remove npm cache and node_modules
+cd jupyter-jbang-runner
+rm -rf node_modules
+rm -rf lib
+rm -rf .npm
+npm cache clean --force
+cd ..
+
+# Remove other build artifacts
+rm -rf ~/.npm
+rm -rf ~/.cache
+rm -rf /tmp/*
+
+echo "Cleanup complete!"

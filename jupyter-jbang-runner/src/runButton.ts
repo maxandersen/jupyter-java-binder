@@ -46,19 +46,58 @@ export class RunButtonExtension implements DocumentRegistry.IWidgetExtension<any
         try {
           // Create a new terminal and run jbang
           const terminal = await this.app.commands.execute('terminal:create-new');
+          console.log('[jupyter-jbang-runner] Terminal created:', terminal);
           
-          // Wait a bit for terminal to be ready
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Wait longer for terminal to be ready and session to be established
+          await new Promise(resolve => setTimeout(resolve, 2000));
           
           // Send the jbang command to the terminal
           const terminalWidget = terminal as any;
+          console.log('[jupyter-jbang-runner] Terminal widget:', terminalWidget);
+          console.log('[jupyter-jbang-runner] Terminal session:', terminalWidget?.session);
+          
           if (terminalWidget && terminalWidget.session) {
             const command = `jbang run "${context.path}"\n`;
             console.log('[jupyter-jbang-runner] Sending command:', command);
-            terminalWidget.session.send({
-              type: 'stdin',
-              content: [command]
-            });
+            
+            // Try multiple ways to send the command
+            try {
+              // Method 1: Direct session send
+              terminalWidget.session.send({
+                type: 'stdin',
+                content: [command]
+              });
+              console.log('[jupyter-jbang-runner] Command sent via session.send');
+            } catch (sendError) {
+              console.error('[jupyter-jbang-runner] Session send failed:', sendError);
+              
+              // Method 2: Try terminal input
+              try {
+                if (terminalWidget.terminal) {
+                  terminalWidget.terminal.send(command);
+                  console.log('[jupyter-jbang-runner] Command sent via terminal.send');
+                }
+              } catch (terminalError) {
+                console.error('[jupyter-jbang-runner] Terminal send failed:', terminalError);
+                
+                // Method 3: Try DOM input
+                try {
+                  const terminalElement = terminalWidget.node.querySelector('.xterm-screen');
+                  if (terminalElement) {
+                    // Simulate typing
+                    for (const char of command) {
+                      const event = new KeyboardEvent('keydown', { key: char });
+                      terminalElement.dispatchEvent(event);
+                    }
+                    console.log('[jupyter-jbang-runner] Command sent via DOM events');
+                  }
+                } catch (domError) {
+                  console.error('[jupyter-jbang-runner] DOM send failed:', domError);
+                }
+              }
+            }
+          } else {
+            console.error('[jupyter-jbang-runner] No terminal session available');
           }
         } catch (error) {
           console.error('[jupyter-jbang-runner] Failed to run file:', error);
