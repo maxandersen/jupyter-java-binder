@@ -48,56 +48,119 @@ export class RunButtonExtension implements DocumentRegistry.IWidgetExtension<any
           const terminal = await this.app.commands.execute('terminal:create-new');
           console.log('[jupyter-jbang-runner] Terminal created:', terminal);
           
-          // Wait longer for terminal to be ready and session to be established
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Send the jbang command to the terminal
+          // Wait for terminal session to be established with polling
           const terminalWidget = terminal as any;
-          console.log('[jupyter-jbang-runner] Terminal widget:', terminalWidget);
-          console.log('[jupyter-jbang-runner] Terminal session:', terminalWidget?.session);
+          let attempts = 0;
+          const maxAttempts = 20; // 10 seconds total
           
-          if (terminalWidget && terminalWidget.session) {
+          const waitForSession = async (): Promise<boolean> => {
+            while (attempts < maxAttempts) {
+              attempts++;
+              console.log(`[jupyter-jbang-runner] Attempt ${attempts}: Checking for terminal session...`);
+              
+              if (terminalWidget?.session) {
+                console.log('[jupyter-jbang-runner] Terminal session found!');
+                return true;
+              }
+              
+              // Wait 500ms before next attempt
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            return false;
+          };
+          
+          const sessionReady = await waitForSession();
+          
+          if (sessionReady) {
             const command = `jbang run "${context.path}"\n`;
             console.log('[jupyter-jbang-runner] Sending command:', command);
             
-            // Try multiple ways to send the command
             try {
-              // Method 1: Direct session send
+              // Method 1: Use the session's send method
               terminalWidget.session.send({
                 type: 'stdin',
                 content: [command]
               });
-              console.log('[jupyter-jbang-runner] Command sent via session.send');
+              console.log('[jupyter-jbang-runner] ✓ Command sent via session.send');
             } catch (sendError) {
               console.error('[jupyter-jbang-runner] Session send failed:', sendError);
               
-              // Method 2: Try terminal input
+              // Method 2: Try the terminal's input method
               try {
-                if (terminalWidget.terminal) {
+                if (terminalWidget.terminal && terminalWidget.terminal.input) {
+                  terminalWidget.terminal.input(command);
+                  console.log('[jupyter-jbang-runner] ✓ Command sent via terminal.input');
+                } else if (terminalWidget.terminal && terminalWidget.terminal.send) {
                   terminalWidget.terminal.send(command);
-                  console.log('[jupyter-jbang-runner] Command sent via terminal.send');
+                  console.log('[jupyter-jbang-runner] ✓ Command sent via terminal.send');
+                } else {
+                  console.error('[jupyter-jbang-runner] No terminal input method available');
                 }
               } catch (terminalError) {
-                console.error('[jupyter-jbang-runner] Terminal send failed:', terminalError);
+                console.error('[jupyter-jbang-runner] Terminal input failed:', terminalError);
                 
-                // Method 3: Try DOM input
+                // Method 3: Try to find and use the xterm instance
                 try {
-                  const terminalElement = terminalWidget.node.querySelector('.xterm-screen');
-                  if (terminalElement) {
-                    // Simulate typing
-                    for (const char of command) {
-                      const event = new KeyboardEvent('keydown', { key: char });
-                      terminalElement.dispatchEvent(event);
-                    }
-                    console.log('[jupyter-jbang-runner] Command sent via DOM events');
+                  const xtermElement = terminalWidget.node.querySelector('.xterm');
+                  if (xtermElement && (xtermElement as any).terminal) {
+                    (xtermElement as any).terminal.send(command);
+                    console.log('[jupyter-jbang-runner] ✓ Command sent via xterm.terminal.send');
+                  } else {
+                    console.error('[jupyter-jbang-runner] No xterm terminal found');
                   }
-                } catch (domError) {
-                  console.error('[jupyter-jbang-runner] DOM send failed:', domError);
+                } catch (xtermError) {
+                  console.error('[jupyter-jbang-runner] XTerm send failed:', xtermError);
                 }
               }
             }
           } else {
-            console.error('[jupyter-jbang-runner] No terminal session available');
+            console.error('[jupyter-jbang-runner] ❌ Terminal session never became available after', maxAttempts, 'attempts');
+            console.log('[jupyter-jbang-runner] Terminal widget structure:', {
+              hasWidget: !!terminalWidget,
+              hasSession: !!terminalWidget?.session,
+              hasTerminal: !!terminalWidget?.terminal,
+              widgetKeys: terminalWidget ? Object.keys(terminalWidget) : 'no widget'
+            });
+            
+            // Fallback: Try to use the terminal's keyboard input
+            console.log('[jupyter-jbang-runner] Trying fallback keyboard input method...');
+            try {
+              const command = `jbang run "${context.path}"\n`;
+              
+              // Focus the terminal and simulate typing
+              if (terminalWidget && terminalWidget.node) {
+                terminalWidget.node.focus();
+                
+                // Wait a bit for focus
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // Try to find the terminal input area
+                const terminalInput = terminalWidget.node.querySelector('.xterm-screen') || 
+                                    terminalWidget.node.querySelector('.xterm') ||
+                                    terminalWidget.node;
+                
+                if (terminalInput) {
+                  // Simulate keyboard events
+                  for (const char of command) {
+                    const keyEvent = new KeyboardEvent('keydown', {
+                      key: char,
+                      code: `Key${char.toUpperCase()}`,
+                      bubbles: true,
+                      cancelable: true
+                    });
+                    terminalInput.dispatchEvent(keyEvent);
+                    
+                    // Small delay between characters
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                  }
+                  console.log('[jupyter-jbang-runner] ✓ Command sent via keyboard simulation');
+                } else {
+                  console.error('[jupyter-jbang-runner] No terminal input element found');
+                }
+              }
+            } catch (fallbackError) {
+              console.error('[jupyter-jbang-runner] Fallback method failed:', fallbackError);
+            }
           }
         } catch (error) {
           console.error('[jupyter-jbang-runner] Failed to run file:', error);
